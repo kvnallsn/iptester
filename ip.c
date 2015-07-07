@@ -1,6 +1,8 @@
 #include <string.h>
 #include <arpa/inet.h>
 
+#include <stdio.h>
+
 #include "ip.h"
 
 /*
@@ -34,15 +36,15 @@ uint16_t csum(uint16_t *buff, int size)
 	return final_sum;
 }
 
-uint16_t build_udp(char *buffer, uint8_t *msg, uint16_t msg_len)
+uint16_t build_udp(char *buffer, uint8_t *msg, uint16_t msg_len, int srcport, int dstport)
 {
 	struct udp_header *udp = (struct udp_header*)(buffer + sizeof(struct ip_header));
 	char *data = buffer + sizeof(struct ip_header) + sizeof(struct udp_header);
 
 	strncpy(data, (char*)msg, msg_len);
 
-	udp->src_port = htons(2332);
-	udp->dst_port = htons(3223);
+	udp->src_port = htons(srcport);
+	udp->dst_port = htons(dstport);
 	udp->length = htons(sizeof(struct udp_header) + msg_len);
 
 	return sizeof(struct udp_header) + sizeof(struct ip_header) + msg_len;

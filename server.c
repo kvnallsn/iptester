@@ -23,6 +23,7 @@ int main(int argc, char **argv)
 
 	char buffer[BUFFER_SIZE];
 
+	/*
 	char port[] = "3223";
 	struct addrinfo hints;
 	struct addrinfo *srvinfo;
@@ -32,14 +33,25 @@ int main(int argc, char **argv)
 	hints.ai_flags = AI_PASSIVE;		
 	int status = getaddrinfo(NULL, port, &hints, &srvinfo);
 	sd = socket(srvinfo->ai_family, srvinfo->ai_socktype, srvinfo->ai_protocol);
-	//sd = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
+	*/
+	sd = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
 	if (sd < 0) {
 		perror("socket");
 		return -1;
 	}
 	
-	status = bind(sd, srvinfo->ai_addr, srvinfo->ai_addrlen);
-	freeaddrinfo(srvinfo);
+	struct sockaddr_in bind_addr;
+	bind_addr.sin_family = AF_INET;
+	bind_addr.sin_port = htons(3223);
+	//bind_addr.sin_addr = 0;
+	inet_pton(AF_INET, "127.0.0.1", &(bind_addr.sin_addr));
+	//status = bind(sd, srvinfo->ai_addr, srvinfo->ai_addrlen);
+	int status = bind(sd, (struct sockaddr*)&bind_addr, sizeof(bind_addr));
+	if (status < 0) {
+		perror("bind");
+		return -1;
+	}
+	//freeaddrinfo(srvinfo);
 
 	int loop_count;
 	for (loop_count = 0; loop_count < 10; loop_count++) {

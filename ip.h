@@ -45,7 +45,7 @@ struct icmp_header {
  * \return     Checksum of buffer (in network byte order)
  */
 uint16_t csum(uint16_t *buff, int size);
-uint16_t build_udp(char *buffer, uint8_t *msg, uint16_t msg_len);
+uint16_t build_udp(char *buffer, uint8_t *msg, uint16_t msg_len, int srcport, int dstport);
 uint16_t build_icmp_request(char *buffer);
 
 #endif

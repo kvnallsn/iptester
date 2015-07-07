@@ -17,13 +17,17 @@ int main(int argc, char **argv)
 	struct sockaddr_in sin;
 	char buffer[BUFFER_SIZE];
 
-	sd = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
+	sd = socket(PF_INET, SOCK_RAW, IPPROTO_UDP);
 	if (sd < 0) {
 		perror("socket");
 		return -1;
 	}
 
+	int srcport = 23320;
+	int dstport = 32230;
 	sin.sin_family = AF_INET;
+	sin.sin_port = htons(dstport);
+	sin.sin_addr.s_addr = inet_addr("127.0.0.1");
 
 	char *ip_buffer = buffer;
 	struct ip_header *ip = (struct ip_header*)ip_buffer;
@@ -39,10 +43,17 @@ int main(int argc, char **argv)
 	ip->src = inet_addr(src_ip);
 	ip->dst = inet_addr(dst_ip);
 	ip->checksum = 0x0000;
+	
+	int one = 1;
+	const int *val = &one;
+	if(setsockopt(sd, IPPROTO_IP, IP_HDRINCL, val, sizeof(one)) < 0) {
+		perror("setsockopt() error");
+		return -1;
+	}
 
 	int loop_count;
 	for (loop_count = 0; loop_count < 10; loop_count++) {
-		uint16_t total_len = build_udp(ip_buffer, (uint8_t*)"Hello, world!", 13);
+		uint16_t total_len = build_udp(ip_buffer, (uint8_t*)"Hello, world!", 13, srcport, dstport);
 		ip->length = total_len;
 		ip->checksum = csum((uint16_t*)ip_buffer, sizeof(struct ip_header));
 
