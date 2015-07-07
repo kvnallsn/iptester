@@ -1,6 +1,6 @@
 C       = gcc
 CFLAGS  = -Wall
-LDFLAGS = -lpcap
+LDFLAGS = 
 CLIENT_SRC = client.o ip.o
 CLIENT_OBJ = $(CLIENT_SRC:.c=.o)
 SERVER_SRC = server.o ip.o
