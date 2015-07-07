@@ -1,6 +1,6 @@
 C       = gcc
 CFLAGS  = -Wall
-LDFLAGS = -lpcap
+LDFLAGS = 
 CLIENT_SRC = client.o ip.o
 CLIENT_OBJ = $(CLIENT_SRC:.c=.o)
 SERVER_SRC = server.o ip.o
@@ -18,9 +18,9 @@ server: $(SERVER_OBJ)
 	$(CC) -c $(CFLAGS) $< -o $@
 
 tar:
-	tar -c client.c Makefile > pkg.tar
+	tar -c client.c server.c Makefile > pkg.tar
 
 clean:
-	rm client client.o
+	rm client client.o server server.o
 
 .PHONY: clean

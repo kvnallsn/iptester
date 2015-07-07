@@ -1,3 +1,4 @@
+#include <time.h>					// for time(...) and timer functions
 #include <stdio.h>
 #include <netdb.h>
 #include <string.h>
@@ -14,6 +15,22 @@
 #include "ip.h"
 
 #define NO_FLAGS	0
+#define TIMEOUT_SEC	10
+
+struct pkt_buffer {
+	uint64_t id;
+	uint64_t total;
+};
+
+void print_stats(struct pkt_buffer *pkt, uint64_t pkt_count)
+{
+	printf("=================\n");
+	printf("Last Pkt Id:  %ld\n", pkt->id);
+	printf("Packets Sent: %ld\n", pkt_count);
+	printf("Packets Recv: %ld\n", pkt->total);
+	printf("Rate: \n");
+	printf("=================\n");
+}
 
 int main(int argc, char **argv)
 {
@@ -23,18 +40,7 @@ int main(int argc, char **argv)
 
 	char buffer[BUFFER_SIZE];
 
-	/*
-	char port[] = "3223";
-	struct addrinfo hints;
-	struct addrinfo *srvinfo;
-	memset(&hints,0,sizeof hints);
-	hints.ai_family = AF_UNSPEC;		// IPv4 or IPv6
-	hints.ai_socktype = SOCK_DGRAM;		// Datagram sockets only!
-	hints.ai_flags = AI_PASSIVE;		
-	int status = getaddrinfo(NULL, port, &hints, &srvinfo);
-	sd = socket(srvinfo->ai_family, srvinfo->ai_socktype, srvinfo->ai_protocol);
-	*/
-	sd = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
+	sd = socket(AF_INET, SOCK_DGRAM, 0);
 	if (sd < 0) {
 		perror("socket");
 		return -1;
@@ -42,26 +48,51 @@ int main(int argc, char **argv)
 	
 	struct sockaddr_in bind_addr;
 	bind_addr.sin_family = AF_INET;
-	bind_addr.sin_port = htons(3223);
-	//bind_addr.sin_addr = 0;
-	inet_pton(AF_INET, "127.0.0.1", &(bind_addr.sin_addr));
-	//status = bind(sd, srvinfo->ai_addr, srvinfo->ai_addrlen);
+	bind_addr.sin_port = htons(32230);
+	bind_addr.sin_addr.s_addr = htons(INADDR_ANY);
 	int status = bind(sd, (struct sockaddr*)&bind_addr, sizeof(bind_addr));
 	if (status < 0) {
 		perror("bind");
 		return -1;
 	}
-	//freeaddrinfo(srvinfo);
 
-	int loop_count;
-	for (loop_count = 0; loop_count < 10; loop_count++) {
-		printf("Waiting for packet...\n");
+	// Set the timeout on the socket
+	struct timeval tv;
+	tv.tv_sec = TIMEOUT_SEC;
+	tv.tv_usec = 0;				/* Init to 0 to avoid random data being filled in */
+	
+	setsockopt(sd, SOL_SOCKET, SO_RCVTIMEO, (char*)&tv, sizeof(struct timeval));
+
+	uint64_t pkt_count = 0;
+	struct pkt_buffer *pkt;
+	for (;;) {
 		if (recvfrom(sd, buffer, BUFFER_SIZE, NO_FLAGS, (struct sockaddr*)&addr, &socklen) < 0) { 
 			perror("recvfrom");
 			return -1;
-		} else {
-			printf("Got packet!");
 		}
+
+		pkt_count++;
+		// receive until timeout or reach packet count (if spec'd)
+		// probably a better way to do this...but quick n' dirty :)
+		time_t stop = time(NULL) + TIMEOUT_SEC;
+		for (;;) {
+			if (recvfrom(sd, buffer, BUFFER_SIZE, NO_FLAGS, (struct sockaddr*)&addr, &socklen) < 0) { 
+				perror("recvfrom");
+				return -1;
+			} 
+
+			pkt = (struct pkt_buffer*)buffer;
+
+			// If he hit the timeout wall, stop
+			if ((++pkt_count == pkt->total) || (time(NULL) >= stop))
+				break;
+			
+		}
+
+		print_stats(pkt, pkt_count);
+
+		// Reset Count
+		pkt_count = 0;
 	}
 
 	close(sd);
