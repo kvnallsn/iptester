@@ -1,4 +1,5 @@
-#include <time.h>					// for time(...) and timer functions
+#include <time.h>					// For time(...) and timer functions
+#include <errno.h>					// For errno (the variable), EAGAIN, and EWOUDLBLOCK
 #include <stdio.h>
 #include <netdb.h>
 #include <string.h>
@@ -57,11 +58,9 @@ int main(int argc, char **argv)
 	}
 
 	// Set the timeout on the socket
-	struct timeval tv;
-	tv.tv_sec = TIMEOUT_SEC;
-	tv.tv_usec = 0;				/* Init to 0 to avoid random data being filled in */
-	
-	setsockopt(sd, SOL_SOCKET, SO_RCVTIMEO, (char*)&tv, sizeof(struct timeval));
+	struct timespec ts;
+	ts.tv_sec = TIMEOUT_SEC;
+	ts.tv_nsec = 0;
 
 	uint64_t pkt_count = 0;
 	struct pkt_buffer *pkt;
@@ -71,24 +70,35 @@ int main(int argc, char **argv)
 			return -1;
 		}
 
+		printf("received connection\n");
 		pkt_count++;
-		// receive until timeout or reach packet count (if spec'd)
-		// probably a better way to do this...but quick n' dirty :)
-		time_t stop = time(NULL) + TIMEOUT_SEC;
-		for (;;) {
-			if (recvfrom(sd, buffer, BUFFER_SIZE, NO_FLAGS, (struct sockaddr*)&addr, &socklen) < 0) { 
-				perror("recvfrom");
+
+		fd_set rfds;
+		FD_ZERO(&rfds);
+		FD_SET(sd, &rfds);
+	
+		for (;;) {	
+			int retval = pselect(1, &rfds, NULL, NULL, &ts, NULL);
+			if (retval == -1) {
+				// Error
+				perror("select");
 				return -1;
-			} 
-
-			pkt = (struct pkt_buffer*)buffer;
-
-			// If he hit the timeout wall, stop
-			if ((++pkt_count == pkt->total) || (time(NULL) >= stop))
+			} else if (retval) {
+				// Pkt recv
+				if (recvfrom(sd, buffer, BUFFER_SIZE, NO_FLAGS, (struct sockaddr*)&addr, &socklen) < 0) {
+					perror("recvfrom");
+					return -1;
+				}
+				pkt = (struct pkt_buffer*)buffer;
+				if (++pkt_count == pkt->total)
+					break;
+			} else {
+				// Timeout
+				printf("timeout received\n");
 				break;
-			
+			}
 		}
-
+	
 		print_stats(pkt, pkt_count);
 
 		// Reset Count
