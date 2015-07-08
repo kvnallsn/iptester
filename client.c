@@ -13,6 +13,7 @@
 
 #include "ip.h"
 
+#define DEFAULT_SIZE		56			// In bytes
 #define DEFAULT_PORT		9050
 #define DEFAULT_PKT_COUNT	10
 
@@ -54,15 +55,15 @@ void send_packets(char *ip, short port, int num_pkts)
 
 void print_help(char *progname)
 {
-     printf("usage: %s [OPTION]...\n"
+     printf("usage: %s [OPTION]... <IP Address>\n"
             "A simple UDP client for testing packet throughput on a network\n\n"
             "Options:\n"
-			"  -a	 IP Address to send packets to"
             "  -n    Number of packets to send (default = 1000)\n"
             "  -p    UDP port to use (default = 9050)\n"
+			"  -s    Size of packets to send (default = 56 bytes)\n"
             "  -h    Help (Prints this document)\n"
             "\nExamples:\n"
-            "%s -a 10.0.2.5 -p 80     UDP client running on port 80 sending to 10.0.2.5\n",
+            "%s -p 80 -n 200 10.0.2.5     UDP client running on port 80 sending to 10.0.2.5\n",
             progname, progname);
 
 }
@@ -70,28 +71,37 @@ void print_help(char *progname)
 int main(int argc, char **argv)
 {
 	int opt;
-	char ip[] = "255.255.255.255";
+	char *ip = NULL;
 	short port = DEFAULT_PORT;
+	short size;
 	int num_pkts = DEFAULT_PKT_COUNT;
 
-	while ((opt = getopt(argc, argv, "a:h::n::p::")) != -1) {
-		switch (opt) {
-		case 'a':
-			strncpy(ip, optarg, strlen(ip));
-			break;
-		case 'h':
-			print_help(argv[0]);
-			exit(EXIT_SUCCESS);
-		case 'n':
-			num_pkts = atoi(optarg);
-			break;
-		case 'p':
-			port = atoi(optarg);
-			break;
-		default:
-			print_help(argv[0]);
-			exit(EXIT_FAILURE);
+	while (optind < argc) {
+		if((opt = getopt(argc, argv, "hn:p:s:")) != -1) {
+			switch (opt) {
+			case 'h':
+				print_help(argv[0]);
+				exit(EXIT_SUCCESS);
+			case 'n':
+				num_pkts = atoi(optarg);
+				break;
+			case 'p':
+				port = atoi(optarg);
+				break;
+			case 's':
+				size = atoi(optarg);
+				break;
+			default:
+				print_help(argv[0]);
+				exit(EXIT_FAILURE);
+			}
+		} else {
+			ip = argv[optind++];
 		}
+	}
+
+	if (ip == NULL) {
+		print_help(argv[0]);
 	}
 
 	send_packets(ip, port, num_pkts);
