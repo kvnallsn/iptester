@@ -14,21 +14,24 @@
 #include "ip.h"
 
 #define DEFAULT_SIZE		56			// In bytes
-#define DEFAULT_PORT		9050
-#define DEFAULT_PKT_COUNT	10
+#define DEFAULT_PORT		9050		// In ports?
+#define DEFAULT_PKT_COUNT	10			// In packets
+#define DEFAULT_TIMEOUT		10			// In seconds
 
 struct pkt_buffer {
-	uint64_t id;
-	uint64_t total;
+	uint64_t id;						// Id of each packet sent (usually incremented)
+	uint64_t total;						// Total number of packets being sent
+	int16_t timeout;					// Timeout between each packet (in seconds)
 };
 
-void send_packets(char *ip, short port, int num_pkts)
+void send_packets(char *ip, short port, int num_pkts, short size, int16_t timeout)
 {
 	int sd;
 	struct sockaddr_in servaddr;
 	char buffer[BUFFER_SIZE];
 	struct pkt_buffer *pkt = (struct pkt_buffer*)buffer;
-	pkt->total = num_pkts;
+	pkt->total = num_pkts + 1;
+	pkt->timeout = timeout;
 
 	sd = socket(AF_INET, SOCK_DGRAM, 0);
 	if (sd < 0) {
@@ -61,6 +64,7 @@ void print_help(char *progname)
             "  -n    Number of packets to send (default = 1000)\n"
             "  -p    UDP port to use (default = 9050)\n"
 			"  -s    Size of packets to send (default = 56 bytes)\n"
+			"  -t    Timeout between each packet (default = 10 seconds)\n"
             "  -h    Help (Prints this document)\n"
             "\nExamples:\n"
             "%s -p 80 -n 200 10.0.2.5     UDP client running on port 80 sending to 10.0.2.5\n",
@@ -73,11 +77,12 @@ int main(int argc, char **argv)
 	int opt;
 	char *ip = NULL;
 	short port = DEFAULT_PORT;
-	short size;
+	short size = DEFAULT_SIZE;
+	int16_t timeout = DEFAULT_TIMEOUT;
 	int num_pkts = DEFAULT_PKT_COUNT;
 
 	while (optind < argc) {
-		if((opt = getopt(argc, argv, "hn:p:s:")) != -1) {
+		if((opt = getopt(argc, argv, "hn:p:s:t:")) != -1) {
 			switch (opt) {
 			case 'h':
 				print_help(argv[0]);
@@ -91,6 +96,9 @@ int main(int argc, char **argv)
 			case 's':
 				size = atoi(optarg);
 				break;
+			case 't':
+				timeout = atoi(optarg);
+				break;
 			default:
 				print_help(argv[0]);
 				exit(EXIT_FAILURE);
@@ -102,9 +110,10 @@ int main(int argc, char **argv)
 
 	if (ip == NULL) {
 		print_help(argv[0]);
+		exit(EXIT_FAILURE);
 	}
 
-	send_packets(ip, port, num_pkts);
+	send_packets(ip, port, num_pkts, size, timeout);
 
 	return 0;
 }
