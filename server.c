@@ -18,20 +18,23 @@
 
 #define NO_FLAGS		0
 #define DEFAULT_PORT	9050
-#define DEFAULT_TIMEOUT	10
+#define DEFAULT_TIMEOUT	5
+#define WAIT_FOR_CONN	-1
 
 struct pkt_buffer {
 	uint64_t id;
 	uint64_t total;
 };
 
-void print_stats(struct pkt_buffer *pkt, uint64_t pkt_count)
+//void print_stats(struct pkt_buffer *pkt, uint64_t pkt_count)
+void print_stats(uint64_t last_pkt_id, uint64_t last_pkt_count, uint64_t pkt_count)
 {
+	double recv_rate = (pkt_count / (1.0 * last_pkt_count));
 	printf("=================\n");
-	printf("Last Pkt Id:  %ld\n", pkt->id);
-	printf("Packets Sent: %ld\n", pkt_count);
-	printf("Packets Recv: %ld\n", pkt->total);
-	printf("Rate: \n");
+	printf("Last Pkt Id:  %ld\n", last_pkt_id);
+	printf("Packets Sent: %ld\n", last_pkt_count);
+	printf("Packets Recv: %ld\n", pkt_count);
+	printf("Recv Rate: %f%%\n", recv_rate);
 	printf("=================\n");
 }
 
@@ -59,52 +62,46 @@ void run_server(short port, long timeout)
 		return;
 	}
 
-	// Set the timeout on the socket
-	struct timespec ts;
-	ts.tv_sec = timeout;
-	ts.tv_nsec = 0;
+	uint64_t last_pkt_id = 0;	
+	uint64_t last_pkt_count = 0;
+	int64_t last_pkt_wait = WAIT_FOR_CONN;
+	time_t last_pkt_recv;
 
 	uint64_t pkt_count = 0;
 	struct pkt_buffer *pkt;
 	for (;;) {
-		if (recvfrom(sd, buffer, BUFFER_SIZE, NO_FLAGS, (struct sockaddr*)&addr, &socklen) < 0) { 
+		if (recvfrom(sd, buffer, BUFFER_SIZE, MSG_DONTWAIT, (struct sockaddr*)&addr, &socklen) < 0) { 
+			// Check to see if we timed out 
+			if (errno == EAGAIN) {
+				// Are we waiting to start a connection?
+				if (last_pkt_wait == WAIT_FOR_CONN)
+					continue;
+				// Has our time for this test expired?
+				if (time(NULL) > (last_pkt_recv + last_pkt_wait))
+					goto reset_conn;
+				else
+					continue;
+			}
+			
 			perror("recvfrom");
 			return;
 		}
 
-		printf("received connection\n");
-		pkt_count++;
+		pkt = (struct pkt_buffer*)buffer;
+		last_pkt_id = pkt->id;
+		last_pkt_count = pkt->total;
+		last_pkt_wait = DEFAULT_TIMEOUT;
+		last_pkt_recv = time(NULL);
 
-		fd_set rfds;
-		FD_ZERO(&rfds);
-		FD_SET(sd, &rfds);
-	
-		for (;;) {	
-			int retval = pselect(1, &rfds, NULL, NULL, &ts, NULL);
-			if (retval == -1) {
-				// Error
-				perror("select");
-				return;
-			} else if (retval) {
-				// Pkt recv
-				if (recvfrom(sd, buffer, BUFFER_SIZE, NO_FLAGS, (struct sockaddr*)&addr, &socklen) < 0) {
-					perror("recvfrom");
-					return;
-				}
-				pkt = (struct pkt_buffer*)buffer;
-				if (++pkt_count == pkt->total)
-					break;
-			} else {
-				// Timeout
-				printf("timeout received\n");
-				break;
-			}
-		}
-	
-		print_stats(pkt, pkt_count);
+		if (++pkt_count < pkt->total)
+			continue;
 
-		// Reset Count
+reset_conn:
+		print_stats(last_pkt_id, last_pkt_count, pkt_count);
 		pkt_count = 0;
+		last_pkt_count = 0;
+		last_pkt_id = 0;
+		last_pkt_wait = WAIT_FOR_CONN;
 	}
 
 	close(sd);
