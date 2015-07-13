@@ -1,3 +1,4 @@
+#include <time.h>						// Clock Info
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -18,19 +19,21 @@
 #define DEFAULT_PKT_COUNT	10			// In packets
 #define DEFAULT_TIMEOUT		10			// In seconds
 
+#define FLAG_NONE			0x00
+#define FLAG_START			0x01
+
 struct pkt_buffer {
 	uint64_t id;						// Id of each packet sent (usually incremented)
-	uint64_t total;						// Total number of packets being sent
+	uint8_t	flags;						// Flags, 0x01 -> START
 	int16_t timeout;					// Timeout between each packet (in seconds)
 };
 
-void send_packets(char *ip, short port, int num_pkts, short size, int16_t timeout)
+void send_packets(char *ip, short port, short size, int16_t timeout)
 {
 	int sd;
 	struct sockaddr_in servaddr;
 	char buffer[BUFFER_SIZE];
 	struct pkt_buffer *pkt = (struct pkt_buffer*)buffer;
-	pkt->total = num_pkts + 1;
 	pkt->timeout = timeout;
 
 	sd = socket(AF_INET, SOCK_DGRAM, 0);
@@ -44,14 +47,34 @@ void send_packets(char *ip, short port, int num_pkts, short size, int16_t timeou
 	servaddr.sin_port = htons(port);
 	servaddr.sin_addr.s_addr = inet_addr(ip); 
 
+	clock_t start_clock = clock();
+	clock_t stop_clock = start_clock + (timeout * CLOCKS_PER_SEC);
+
+	// Send initial packet
+	pkt->id = 0;
+	pkt->flags = FLAG_START;
+	sendto(sd, buffer, sizeof(struct pkt_buffer), 0, (struct sockaddr*)&servaddr, sizeof(servaddr));
+
+	pkt->flags = FLAG_NONE;
 	int loop_count;
-	for (loop_count = 0; loop_count < num_pkts; loop_count++) {
+	//for (loop_count = 0; loop_count < num_pkts; loop_count++) {
+	for (loop_count = 1; clock() < stop_clock; loop_count++) {
 		pkt->id = loop_count;
-		if (sendto(sd, buffer, sizeof(struct pkt_buffer), 0, (struct sockaddr*)&servaddr, sizeof(servaddr)) < 0) {
+		if (sizeof(pkt) < size) {
+			// Fill in random info until we reach the appropriate size
+			short padd_data_size = size - sizeof(struct pkt_buffer);
+			FILE *urandom = fopen("/dev/urandom", "r");
+			fread(buffer + sizeof(struct pkt_buffer), padd_data_size, 1, urandom);
+			fclose(urandom);
+		}
+
+		if (sendto(sd, buffer, size, 0, (struct sockaddr*)&servaddr, sizeof(servaddr)) < 0) {
 			perror("sendto");
 			return;
 		}	
 	}
+
+	printf("Sent %d Packets\n", loop_count);
 
 	close(sd);
 }
@@ -79,7 +102,6 @@ int main(int argc, char **argv)
 	short port = DEFAULT_PORT;
 	short size = DEFAULT_SIZE;
 	int16_t timeout = DEFAULT_TIMEOUT;
-	int num_pkts = DEFAULT_PKT_COUNT;
 
 	while (optind < argc) {
 		if((opt = getopt(argc, argv, "hn:p:s:t:")) != -1) {
@@ -87,9 +109,6 @@ int main(int argc, char **argv)
 			case 'h':
 				print_help(argv[0]);
 				exit(EXIT_SUCCESS);
-			case 'n':
-				num_pkts = atoi(optarg);
-				break;
 			case 'p':
 				port = atoi(optarg);
 				break;
@@ -113,7 +132,7 @@ int main(int argc, char **argv)
 		exit(EXIT_FAILURE);
 	}
 
-	send_packets(ip, port, num_pkts, size, timeout);
+	send_packets(ip, port, size, timeout);
 
 	return 0;
 }
