@@ -1,26 +1,21 @@
 C       = gcc
 CFLAGS  = -Wall
 LDFLAGS = 
-CLIENT_SRC = client.o ip.o
-CLIENT_OBJ = $(CLIENT_SRC:.c=.o)
-SERVER_SRC = server.o ip.o
-SERVER_OBJ = $(SERVER_SRC:.c=.o)
+SRC = iptester.c ip.c
+OBJ = $(SRC:.c=.o)
 
-all: client server
+all: iptester
 
-client: $(CLIENT_OBJ)
-	$(CC) $(LDFLAGS) $(CLIENT_OBJ) -o $@
-
-server: $(SERVER_OBJ)
-	$(CC) $(LDFLAGS) $(SERVER_OBJ) -o $@
+iptester: $(OBJ)
+	$(CC) $(LDFLAGS) $(OBJ) -o $@
 
 %.o: %.c
 	$(CC) -c $(CFLAGS) $< -o $@
 
 tar:
-	tar -c client.c Makefile > pkg.tar
+	tar -c iptester.c Makefile > pkg.tar
 
 clean:
-	rm client client.o
+	rm iptester iptester.c
 
 .PHONY: clean
